@@ -3260,3 +3260,36 @@ TypeError: websocket_handler_with_context() missing 1 required positional argume
 2025-08-30 17:20:42,660 - __main__ - INFO - Documents list request - Client IP: 127.0.0.1
 2025-08-30 17:20:42,662 - __main__ - INFO - Documents list completed successfully - Count: 3, Duration: 0.001s, Client IP: 127.0.0.1
 2025-08-30 17:20:42,662 - werkzeug - INFO - 127.0.0.1 - - [30/Aug/2025 17:20:42] "GET /documents HTTP/1.1" 200 -
+2025-08-30 17:21:19,661 - __main__ - INFO - Documents list request - Client IP: 127.0.0.1
+2025-08-30 17:21:19,662 - __main__ - INFO - Documents list completed successfully - Count: 3, Duration: 0.001s, Client IP: 127.0.0.1
+2025-08-30 17:21:19,662 - werkzeug - INFO - 127.0.0.1 - - [30/Aug/2025 17:21:19] "GET /documents HTTP/1.1" 200 -
+2025-08-30 17:22:19,661 - __main__ - INFO - Documents list request - Client IP: 127.0.0.1
+2025-08-30 17:22:19,662 - __main__ - INFO - Documents list completed successfully - Count: 3, Duration: 0.001s, Client IP: 127.0.0.1
+2025-08-30 17:22:19,662 - werkzeug - INFO - 127.0.0.1 - - [30/Aug/2025 17:22:19] "GET /documents HTTP/1.1" 200 -
+2025-08-30 17:23:19,661 - __main__ - INFO - Documents list request - Client IP: 127.0.0.1
+2025-08-30 17:23:19,662 - __main__ - INFO - Documents list completed successfully - Count: 3, Duration: 0.001s, Client IP: 127.0.0.1
+2025-08-30 17:23:19,663 - werkzeug - INFO - 127.0.0.1 - - [30/Aug/2025 17:23:19] "GET /documents HTTP/1.1" 200 -
+2025-08-30 17:24:19,661 - __main__ - INFO - Documents list request - Client IP: 127.0.0.1
+2025-08-30 17:24:19,662 - __main__ - INFO - Documents list completed successfully - Count: 3, Duration: 0.001s, Client IP: 127.0.0.1
+2025-08-30 17:24:19,662 - werkzeug - INFO - 127.0.0.1 - - [30/Aug/2025 17:24:19] "GET /documents HTTP/1.1" 200 -
+2025-08-30 17:25:19,661 - __main__ - INFO - Documents list request - Client IP: 127.0.0.1
+2025-08-30 17:25:19,662 - __main__ - INFO - Documents list completed successfully - Count: 3, Duration: 0.001s, Client IP: 127.0.0.1
+2025-08-30 17:25:19,662 - werkzeug - INFO - 127.0.0.1 - - [30/Aug/2025 17:25:19] "GET /documents HTTP/1.1" 200 -
+2025-08-30 17:26:19,661 - __main__ - INFO - Documents list request - Client IP: 127.0.0.1
+2025-08-30 17:26:19,662 - __main__ - INFO - Documents list completed successfully - Count: 3, Duration: 0.001s, Client IP: 127.0.0.1
+2025-08-30 17:26:19,662 - werkzeug - INFO - 127.0.0.1 - - [30/Aug/2025 17:26:19] "GET /documents HTTP/1.1" 200 -
+2025-08-30 17:27:19,661 - __main__ - INFO - Documents list request - Client IP: 127.0.0.1
+2025-08-30 17:27:19,662 - __main__ - INFO - Documents list completed successfully - Count: 3, Duration: 0.001s, Client IP: 127.0.0.1
+2025-08-30 17:27:19,662 - werkzeug - INFO - 127.0.0.1 - - [30/Aug/2025 17:27:19] "GET /documents HTTP/1.1" 200 -
+2025-08-30 17:28:19,660 - __main__ - INFO - Documents list request - Client IP: 127.0.0.1
+2025-08-30 17:28:19,662 - __main__ - INFO - Documents list completed successfully - Count: 3, Duration: 0.001s, Client IP: 127.0.0.1
+2025-08-30 17:28:19,662 - werkzeug - INFO - 127.0.0.1 - - [30/Aug/2025 17:28:19] "GET /documents HTTP/1.1" 200 -
+2025-08-30 17:29:19,661 - __main__ - INFO - Documents list request - Client IP: 127.0.0.1
+2025-08-30 17:29:19,662 - __main__ - INFO - Documents list completed successfully - Count: 3, Duration: 0.001s, Client IP: 127.0.0.1
+2025-08-30 17:29:19,662 - werkzeug - INFO - 127.0.0.1 - - [30/Aug/2025 17:29:19] "GET /documents HTTP/1.1" 200 -
+2025-08-30 17:30:19,660 - __main__ - INFO - Documents list request - Client IP: 127.0.0.1
+2025-08-30 17:30:19,661 - __main__ - INFO - Documents list completed successfully - Count: 3, Duration: 0.001s, Client IP: 127.0.0.1
+2025-08-30 17:30:19,662 - werkzeug - INFO - 127.0.0.1 - - [30/Aug/2025 17:30:19] "GET /documents HTTP/1.1" 200 -
+2025-08-30 17:31:19,661 - __main__ - INFO - Documents list request - Client IP: 127.0.0.1
+2025-08-30 17:31:19,662 - __main__ - INFO - Documents list completed successfully - Count: 3, Duration: 0.001s, Client IP: 127.0.0.1
+2025-08-30 17:31:19,662 - werkzeug - INFO - 127.0.0.1 - - [30/Aug/2025 17:31:19] "GET /documents HTTP/1.1" 200 -

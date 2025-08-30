@@ -106,3 +106,5 @@
 2025-08-30 17:10:24,827 - __main__ - INFO - Database tables created/verified successfully
 2025-08-30 17:15:44,851 - __main__ - INFO - Worker status - Tasks processed: 0, Idle cycles: 29, Last activity: 2025-08-30 17:10:24.827555
 2025-08-30 17:20:54,844 - __main__ - INFO - Worker status - Tasks processed: 0, Idle cycles: 57, Last activity: 2025-08-30 17:15:34.770830
+2025-08-30 17:26:05,026 - __main__ - INFO - Worker status - Tasks processed: 0, Idle cycles: 85, Last activity: 2025-08-30 17:20:44.773330
+2025-08-30 17:31:15,034 - __main__ - INFO - Worker status - Tasks processed: 0, Idle cycles: 113, Last activity: 2025-08-30 17:25:54.963946
