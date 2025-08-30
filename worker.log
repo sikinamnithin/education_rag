@@ -1,0 +1,108 @@
+2025-08-30 16:19:28,670 - queue_service - INFO - Initializing QueueService...
+2025-08-30 16:19:28,671 - queue_service - INFO - Redis connection established - URL: redis://localhost:6379
+2025-08-30 16:19:28,671 - queue_service - INFO - QueueService initialized - Queue: file_processing_queue
+2025-08-30 16:19:28,671 - document_processor - INFO - Initializing DocumentProcessor...
+2025-08-30 16:19:28,809 - document_processor - INFO - Azure OpenAI embeddings initialized - Endpoint: https://llm-rag-demo.openai.azure.com/, Deployment: text-embedding-ada-002
+2025-08-30 16:19:28,814 - document_processor - INFO - Qdrant client initialized - URL: http://localhost:6333
+2025-08-30 16:19:28,814 - document_processor - INFO - Text splitter configured - Chunk size: 1000, Overlap: 200
+2025-08-30 16:19:28,816 - httpx - INFO - HTTP Request: GET http://localhost:6333/collections/documents "HTTP/1.1 200 OK"
+2025-08-30 16:19:28,817 - document_processor - INFO - Qdrant collection 'documents' already exists - Points: 1
+2025-08-30 16:19:28,817 - document_processor - INFO - DocumentProcessor initialization completed
+2025-08-30 16:19:28,817 - __main__ - INFO - ==================================================
+2025-08-30 16:19:28,817 - __main__ - INFO - Starting document processing worker...
+2025-08-30 16:19:28,817 - __main__ - INFO - Worker started at: 2025-08-30 16:19:28.817269
+2025-08-30 16:19:28,817 - __main__ - INFO - Configuration - Redis URL: redis://localhost:6379
+2025-08-30 16:19:28,817 - __main__ - INFO - Configuration - Qdrant URL: http://localhost:6333
+2025-08-30 16:19:28,817 - __main__ - INFO - Configuration - Database URL: localhost:5432/education_app
+2025-08-30 16:19:28,817 - __main__ - INFO - ==================================================
+2025-08-30 16:19:28,828 - __main__ - INFO - Database tables created/verified successfully
+2025-08-30 16:24:15,085 - __main__ - INFO - Retrieved task #1 from queue: {'document_id': 3, 'action': 'index', 'file_path': 'uploads/451c5ea8-2c9c-4af4-8b74-c6fd7652d57e_PaySlip_JULY.pdf', 'filename': '451c5ea8-2c9c-4af4-8b74-c6fd7652d57e_PaySlip_JULY.pdf'}
+2025-08-30 16:24:15,085 - __main__ - INFO - Processing task - Document ID: 3, Action: index, Task: {'document_id': 3, 'action': 'index', 'file_path': 'uploads/451c5ea8-2c9c-4af4-8b74-c6fd7652d57e_PaySlip_JULY.pdf', 'filename': '451c5ea8-2c9c-4af4-8b74-c6fd7652d57e_PaySlip_JULY.pdf'}
+2025-08-30 16:24:15,091 - __main__ - INFO - Found document - ID: 3, Filename: PaySlip_JULY.pdf, Status: ProcessingStatus.PENDING, File size: 115443 bytes
+2025-08-30 16:24:15,091 - __main__ - INFO - Starting document indexing - Document ID: 3, File: PaySlip_JULY.pdf, Path: uploads/451c5ea8-2c9c-4af4-8b74-c6fd7652d57e_PaySlip_JULY.pdf
+2025-08-30 16:24:15,094 - __main__ - INFO - Updated document status to PROCESSING - Document ID: 3
+2025-08-30 16:24:15,096 - document_processor - INFO - Starting document processing - Document ID: 3, File: uploads/451c5ea8-2c9c-4af4-8b74-c6fd7652d57e_PaySlip_JULY.pdf
+2025-08-30 16:24:15,096 - document_processor - INFO - File found - Size: 115443 bytes, Path: uploads/451c5ea8-2c9c-4af4-8b74-c6fd7652d57e_PaySlip_JULY.pdf
+2025-08-30 16:24:15,125 - document_processor - INFO - Using PyPDFLoader for PDF file: uploads/451c5ea8-2c9c-4af4-8b74-c6fd7652d57e_PaySlip_JULY.pdf
+2025-08-30 16:24:15,150 - document_processor - INFO - Document loaded - Pages/sections: 1, Total characters: 646, Load time: 0.05s
+2025-08-30 16:24:15,150 - document_processor - INFO - Document chunked - Chunks created: 1, Split time: 0.00s
+2025-08-30 16:24:15,150 - document_processor - INFO - Adding 1 chunks to vector store...
+2025-08-30 16:24:16,193 - httpx - INFO - HTTP Request: POST https://llm-rag-demo.openai.azure.com/openai/deployments/text-embedding-ada-002/embeddings?api-version=2025-01-01-preview "HTTP/1.1 200 OK"
+2025-08-30 16:24:16,200 - httpx - INFO - HTTP Request: PUT http://localhost:6333/collections/documents/points?wait=true "HTTP/1.1 200 OK"
+2025-08-30 16:24:16,200 - document_processor - INFO - Document processing completed successfully - Document ID: 3, Chunks: 1, Embedding time: 1.05s, Total time: 1.10s
+2025-08-30 16:24:16,200 - __main__ - INFO - Document indexing completed successfully - Document ID: 3, Chunks created: 1, Processing time: 1.11s, Collection: documents
+2025-08-30 16:24:16,204 - __main__ - INFO - Updated document status in database - Document ID: 3, Final status: ProcessingStatus.COMPLETED
+2025-08-30 16:24:16,204 - __main__ - INFO - Task processing completed - Document ID: 3, Action: index, Total duration: 1.12s
+2025-08-30 16:24:16,204 - __main__ - INFO - Task #1 completed in 1.12s
+2025-08-30 16:29:25,302 - __main__ - INFO - Worker status - Tasks processed: 1, Idle cycles: 28, Last activity: 2025-08-30 16:24:05.641641
+2025-08-30 16:34:35,333 - __main__ - INFO - Worker status - Tasks processed: 1, Idle cycles: 56, Last activity: 2025-08-30 16:29:15.231059
+2025-08-30 16:39:45,278 - __main__ - INFO - Worker status - Tasks processed: 1, Idle cycles: 84, Last activity: 2025-08-30 16:34:25.257747
+2025-08-30 16:42:09,899 - __main__ - INFO - ==================================================
+2025-08-30 16:42:09,899 - __main__ - INFO - Worker shutdown initiated at: 2025-08-30 16:42:09.899359
+2025-08-30 16:42:09,899 - __main__ - INFO - Total tasks processed: 1
+2025-08-30 16:42:09,899 - __main__ - INFO - Worker shutting down gracefully...
+2025-08-30 16:42:09,899 - __main__ - INFO - ==================================================
+2025-08-30 16:42:11,471 - queue_service - INFO - Initializing QueueService...
+2025-08-30 16:42:11,473 - queue_service - INFO - Redis connection established - URL: redis://localhost:6379
+2025-08-30 16:42:11,473 - queue_service - INFO - QueueService initialized - Queue: file_processing_queue
+2025-08-30 16:42:11,473 - document_processor - INFO - Initializing DocumentProcessor...
+2025-08-30 16:42:11,473 - document_processor - INFO - Azure OpenAI embeddings configured - Endpoint: https://llm-rag-demo.openai.azure.com/, Deployment: text-embedding-ada-002
+2025-08-30 16:42:11,511 - document_processor - INFO - Qdrant client initialized - URL: http://localhost:6333
+2025-08-30 16:42:11,511 - document_processor - INFO - Text chunking configured - Chunk size: 1000, Overlap: 200
+2025-08-30 16:42:11,513 - httpx - INFO - HTTP Request: GET http://localhost:6333/collections/documents "HTTP/1.1 200 OK"
+2025-08-30 16:42:11,514 - document_processor - INFO - Qdrant collection 'documents' already exists - Points: 2
+2025-08-30 16:42:11,514 - document_processor - INFO - DocumentProcessor initialization completed
+2025-08-30 16:42:11,514 - __main__ - INFO - ==================================================
+2025-08-30 16:42:11,515 - __main__ - INFO - Starting document processing worker...
+2025-08-30 16:42:11,515 - __main__ - INFO - Worker started at: 2025-08-30 16:42:11.515046
+2025-08-30 16:42:11,515 - __main__ - INFO - Configuration - Redis URL: redis://localhost:6379
+2025-08-30 16:42:11,515 - __main__ - INFO - Configuration - Qdrant URL: http://localhost:6333
+2025-08-30 16:42:11,515 - __main__ - INFO - Configuration - Database URL: localhost:5432/education_app
+2025-08-30 16:42:11,515 - __main__ - INFO - ==================================================
+2025-08-30 16:42:11,525 - __main__ - INFO - Database tables created/verified successfully
+2025-08-30 16:42:23,175 - __main__ - INFO - Retrieved task #1 from queue: {'document_id': 4, 'action': 'index', 'file_path': 'uploads/2927f508-8101-4efc-93df-864bc8430fe3_PaySlip_JULY.pdf', 'filename': '2927f508-8101-4efc-93df-864bc8430fe3_PaySlip_JULY.pdf'}
+2025-08-30 16:42:23,175 - __main__ - INFO - Processing task - Document ID: 4, Action: index, Task: {'document_id': 4, 'action': 'index', 'file_path': 'uploads/2927f508-8101-4efc-93df-864bc8430fe3_PaySlip_JULY.pdf', 'filename': '2927f508-8101-4efc-93df-864bc8430fe3_PaySlip_JULY.pdf'}
+2025-08-30 16:42:23,179 - __main__ - INFO - Found document - ID: 4, Filename: PaySlip_JULY.pdf, Status: ProcessingStatus.PENDING, File size: 115443 bytes
+2025-08-30 16:42:23,179 - __main__ - INFO - Starting document indexing - Document ID: 4, File: PaySlip_JULY.pdf, Path: uploads/2927f508-8101-4efc-93df-864bc8430fe3_PaySlip_JULY.pdf
+2025-08-30 16:42:23,183 - __main__ - INFO - Updated document status to PROCESSING - Document ID: 4
+2025-08-30 16:42:23,185 - document_processor - INFO - Starting document processing - Document ID: 4, File: uploads/2927f508-8101-4efc-93df-864bc8430fe3_PaySlip_JULY.pdf
+2025-08-30 16:42:23,185 - document_processor - INFO - File found - Size: 115443 bytes, Path: uploads/2927f508-8101-4efc-93df-864bc8430fe3_PaySlip_JULY.pdf
+2025-08-30 16:42:23,206 - document_processor - INFO - Document loaded - Characters: 688, Load time: 0.02s
+2025-08-30 16:42:23,206 - document_processor - INFO - Document chunked - Chunks created: 1, Split time: 0.00s
+2025-08-30 16:42:24,348 - document_processor - INFO - Embeddings generated - Duration: 1.14s
+2025-08-30 16:42:24,352 - httpx - INFO - HTTP Request: PUT http://localhost:6333/collections/documents/points?wait=true "HTTP/1.1 200 OK"
+2025-08-30 16:42:24,353 - document_processor - INFO - Document processing completed successfully - Document ID: 4, Chunks: 1, Embedding time: 1.14s, Store time: 0.00s, Total time: 1.17s
+2025-08-30 16:42:24,353 - __main__ - INFO - Document indexing completed successfully - Document ID: 4, Chunks created: 1, Processing time: 1.17s, Collection: documents
+2025-08-30 16:42:24,356 - __main__ - INFO - Updated document status in database - Document ID: 4, Final status: ProcessingStatus.COMPLETED
+2025-08-30 16:42:24,357 - __main__ - INFO - Task processing completed - Document ID: 4, Action: index, Total duration: 1.18s
+2025-08-30 16:42:24,357 - __main__ - INFO - Task #1 completed in 1.18s
+2025-08-30 16:47:33,445 - __main__ - INFO - Worker status - Tasks processed: 1, Idle cycles: 28, Last activity: 2025-08-30 16:42:22.555794
+2025-08-30 16:52:43,537 - __main__ - INFO - Worker status - Tasks processed: 1, Idle cycles: 56, Last activity: 2025-08-30 16:47:23.366082
+2025-08-30 16:57:53,618 - __main__ - INFO - Worker status - Tasks processed: 1, Idle cycles: 84, Last activity: 2025-08-30 16:52:33.468365
+2025-08-30 17:03:03,661 - __main__ - INFO - Worker status - Tasks processed: 1, Idle cycles: 112, Last activity: 2025-08-30 16:57:43.543690
+2025-08-30 17:08:13,863 - __main__ - INFO - Worker status - Tasks processed: 1, Idle cycles: 140, Last activity: 2025-08-30 17:02:53.593416
+2025-08-30 17:10:23,451 - __main__ - INFO - ==================================================
+2025-08-30 17:10:23,451 - __main__ - INFO - Worker shutdown initiated at: 2025-08-30 17:10:23.451416
+2025-08-30 17:10:23,451 - __main__ - INFO - Total tasks processed: 1
+2025-08-30 17:10:23,451 - __main__ - INFO - Worker shutting down gracefully...
+2025-08-30 17:10:23,451 - __main__ - INFO - ==================================================
+2025-08-30 17:10:24,774 - queue_service - INFO - Initializing QueueService...
+2025-08-30 17:10:24,776 - queue_service - INFO - Redis connection established - URL: redis://localhost:6379
+2025-08-30 17:10:24,776 - queue_service - INFO - QueueService initialized - Queue: file_processing_queue
+2025-08-30 17:10:24,776 - document_processor - INFO - Initializing DocumentProcessor...
+2025-08-30 17:10:24,776 - document_processor - INFO - Azure OpenAI embeddings configured - Endpoint: https://llm-rag-demo.openai.azure.com/, Deployment: text-embedding-ada-002
+2025-08-30 17:10:24,813 - document_processor - INFO - Qdrant client initialized - URL: http://localhost:6333
+2025-08-30 17:10:24,813 - document_processor - INFO - Text chunking configured - Chunk size: 1000, Overlap: 200
+2025-08-30 17:10:24,814 - httpx - INFO - HTTP Request: GET http://localhost:6333/collections/documents "HTTP/1.1 200 OK"
+2025-08-30 17:10:24,816 - document_processor - INFO - Qdrant collection 'documents' already exists - Points: 3
+2025-08-30 17:10:24,816 - document_processor - INFO - DocumentProcessor initialization completed
+2025-08-30 17:10:24,816 - __main__ - INFO - ==================================================
+2025-08-30 17:10:24,816 - __main__ - INFO - Starting document processing worker...
+2025-08-30 17:10:24,816 - __main__ - INFO - Worker started at: 2025-08-30 17:10:24.816297
+2025-08-30 17:10:24,816 - __main__ - INFO - Configuration - Redis URL: redis://localhost:6379
+2025-08-30 17:10:24,816 - __main__ - INFO - Configuration - Qdrant URL: http://localhost:6333
+2025-08-30 17:10:24,816 - __main__ - INFO - Configuration - Database URL: localhost:5432/education_app
+2025-08-30 17:10:24,816 - __main__ - INFO - ==================================================
+2025-08-30 17:10:24,827 - __main__ - INFO - Database tables created/verified successfully
+2025-08-30 17:15:44,851 - __main__ - INFO - Worker status - Tasks processed: 0, Idle cycles: 29, Last activity: 2025-08-30 17:10:24.827555
+2025-08-30 17:20:54,844 - __main__ - INFO - Worker status - Tasks processed: 0, Idle cycles: 57, Last activity: 2025-08-30 17:15:34.770830
