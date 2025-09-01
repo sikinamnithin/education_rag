@@ -6,12 +6,13 @@ import traceback
 import asyncio
 import threading
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 import redis
 import json
 import websockets
-from models import db, Document, ProcessingStatus, ChatSession, ChatMessage
+from models import db, Document, ProcessingStatus, ChatSession, ChatMessage, User
 from config import Config
 from rag_service import RAGService
 
@@ -27,6 +28,16 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Please log in to access this page.'
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 try:
     db.init_app(app)
@@ -98,6 +109,11 @@ class WebSocketChatHandler:
         try:
             question = data.get('message', '').strip()
             session_id = data.get('session_id')
+            user_id = data.get('user_id')
+            
+            if not user_id:
+                await self.send_message(websocket, 'error', {'message': 'User authentication required'})
+                return
             
             if not question:
                 await self.send_message(websocket, 'error', {'message': 'Question is required'})
@@ -107,6 +123,7 @@ class WebSocketChatHandler:
                 session_id = str(uuid.uuid4())
                 
                 chat_session = ChatSession(
+                    user_id=user_id,
                     session_id=session_id,
                     title=question[:50] + ('...' if len(question) > 50 else '')
                 )
@@ -114,6 +131,9 @@ class WebSocketChatHandler:
                 db.session.commit()
                 
                 await self.send_message(websocket, 'session_created', {'session_id': session_id})
+                
+                # Send updated sessions list to refresh sidebar
+                await self.handle_get_sessions(websocket, {'user_id': user_id})
             
             user_message = ChatMessage(
                 session_id=session_id,
@@ -135,7 +155,7 @@ class WebSocketChatHandler:
             await self.send_message(websocket, 'typing', {'status': True})
             
             start_time = datetime.now()
-            response = rag_service.query_with_context(question, conversation_history)
+            response = rag_service.query_with_context(question, conversation_history, user_id=user_id)
             
             assistant_message = ChatMessage(
                 session_id=session_id,
@@ -165,8 +185,20 @@ class WebSocketChatHandler:
     async def handle_get_history(self, websocket, data):
         try:
             session_id = data.get('session_id')
+            user_id = data.get('user_id')
+            
+            if not user_id:
+                await self.send_message(websocket, 'error', {'message': 'User authentication required'})
+                return
+                
             if not session_id:
                 await self.send_message(websocket, 'error', {'message': 'Session ID required'})
+                return
+            
+            # Verify the session belongs to the user
+            session = ChatSession.query.filter_by(session_id=session_id, user_id=user_id).first()
+            if not session:
+                await self.send_message(websocket, 'error', {'message': 'Session not found or unauthorized'})
                 return
             
             messages = ChatMessage.query.filter_by(session_id=session_id)\
@@ -186,6 +218,31 @@ class WebSocketChatHandler:
             logger.error(f"Get history failed: {str(e)}")
             await self.send_message(websocket, 'error', {'message': 'Failed to retrieve chat history'})
     
+    async def handle_get_sessions(self, websocket, data):
+        try:
+            user_id = data.get('user_id')
+            
+            if not user_id:
+                await self.send_message(websocket, 'error', {'message': 'User authentication required'})
+                return
+            
+            sessions = ChatSession.query.filter_by(user_id=user_id)\
+                                       .order_by(ChatSession.updated_at.desc()).all()
+            
+            sessions_data = [{
+                'session_id': session.session_id,
+                'title': session.title,
+                'created_at': session.created_at.isoformat(),
+                'updated_at': session.updated_at.isoformat(),
+                'message_count': len(session.messages)
+            } for session in sessions]
+            
+            await self.send_message(websocket, 'sessions_list', {'sessions': sessions_data})
+            
+        except Exception as e:
+            logger.error(f"Get sessions failed: {str(e)}")
+            await self.send_message(websocket, 'error', {'message': 'Failed to retrieve chat sessions'})
+    
     async def handle_message(self, websocket, message):
         try:
             data = json.loads(message)
@@ -195,6 +252,8 @@ class WebSocketChatHandler:
                 await self.handle_chat_message(websocket, data)
             elif message_type == 'get_history':
                 await self.handle_get_history(websocket, data)
+            elif message_type == 'get_sessions':
+                await self.handle_get_sessions(websocket, data)
             else:
                 await self.send_message(websocket, 'error', {'message': f'Unknown message type: {message_type}'})
                 
@@ -228,12 +287,92 @@ async def websocket_handler_with_context(websocket):
 
 @app.route('/')
 def home():
-    logger.info("Home page accessed")
+    if not current_user.is_authenticated:
+        return redirect(url_for('login'))
+    
+    logger.info(f"Home page accessed by user: {current_user.username}")
     try:
         return render_template('index.html')
     except Exception as e:
         logger.error(f"Error rendering home page: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('home'))
+    
+    if request.method == 'POST':
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        
+        if not username or not password:
+            return jsonify({'error': 'Username and password required'}), 400
+        
+        user = User.query.filter_by(username=username).first()
+        
+        if user and user.check_password(password):
+            login_user(user)
+            logger.info(f"User logged in successfully: {username}")
+            return jsonify({'message': 'Login successful', 'user': user.to_dict()}), 200
+        else:
+            logger.warning(f"Failed login attempt for username: {username}")
+            return jsonify({'error': 'Invalid username or password'}), 401
+    
+    return render_template('auth.html', mode='login')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('home'))
+    
+    if request.method == 'POST':
+        data = request.get_json()
+        username = data.get('username')
+        email = data.get('email')
+        password = data.get('password')
+        
+        if not username or not email or not password:
+            return jsonify({'error': 'Username, email, and password required'}), 400
+        
+        # Check if user already exists
+        if User.query.filter_by(username=username).first():
+            return jsonify({'error': 'Username already exists'}), 409
+        
+        if User.query.filter_by(email=email).first():
+            return jsonify({'error': 'Email already registered'}), 409
+        
+        # Create new user
+        user = User(username=username, email=email)
+        user.set_password(password)
+        
+        try:
+            db.session.add(user)
+            db.session.commit()
+            
+            login_user(user)
+            logger.info(f"New user registered and logged in: {username}")
+            return jsonify({'message': 'Registration successful', 'user': user.to_dict()}), 201
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Registration failed for {username}: {str(e)}")
+            return jsonify({'error': 'Registration failed'}), 500
+    
+    return render_template('auth.html', mode='register')
+
+@app.route('/logout', methods=['POST'])
+@login_required
+def logout():
+    username = current_user.username
+    logout_user()
+    logger.info(f"User logged out: {username}")
+    return jsonify({'message': 'Logged out successfully'}), 200
+
+@app.route('/api/current-user')
+@login_required
+def current_user_info():
+    return jsonify(current_user.to_dict()), 200
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -273,11 +412,12 @@ def health_check():
     return jsonify(health_status), status_code
 
 @app.route('/upload', methods=['POST'])
+@login_required
 def upload_file():
     start_time = datetime.now()
     client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'Unknown'))
     
-    logger.info(f"File upload request received - Client IP: {client_ip}")
+    logger.info(f"File upload request received - User: {current_user.username}, Client IP: {client_ip}")
     
     if 'file' not in request.files:
         logger.warning(f"Upload failed - No file provided - Client IP: {client_ip}")
@@ -307,6 +447,7 @@ def upload_file():
         logger.info(f"File saved successfully - Size: {file_size} bytes, Path: {file_path}")
         
         document = Document(
+            user_id=current_user.id,
             filename=unique_filename,
             original_filename=original_filename,
             file_path=file_path,
@@ -362,14 +503,18 @@ def upload_file():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/documents/<int:document_id>', methods=['DELETE'])
+@login_required
 def delete_document(document_id):
     start_time = datetime.now()
     client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'Unknown'))
     
-    logger.info(f"Document deletion request - Document ID: {document_id}, Client IP: {client_ip}")
+    logger.info(f"Document deletion request - Document ID: {document_id}, User: {current_user.username}, Client IP: {client_ip}")
     
     try:
-        document = Document.query.get_or_404(document_id)
+        document = Document.query.filter_by(id=document_id, user_id=current_user.id).first()
+        if not document:
+            logger.warning(f"Document not found or unauthorized - Document ID: {document_id}, User: {current_user.username}")
+            return jsonify({'error': 'Document not found'}), 404
         
         logger.info(f"Document found for deletion - ID: {document_id}, "
                    f"Filename: {document.original_filename}, Status: {document.status}, "
@@ -424,14 +569,15 @@ def delete_document(document_id):
         return jsonify({'error': str(e)}), status_code
 
 @app.route('/documents', methods=['GET'])
+@login_required
 def list_documents():
     start_time = datetime.now()
     client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'Unknown'))
     
-    logger.info(f"Documents list request - Client IP: {client_ip}")
+    logger.info(f"Documents list request - User: {current_user.username}, Client IP: {client_ip}")
     
     try:
-        documents = Document.query.all()
+        documents = Document.query.filter_by(user_id=current_user.id).all()
         document_count = len(documents)
         
         response_data = [doc.to_dict() for doc in documents]
@@ -452,6 +598,7 @@ def list_documents():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/query', methods=['POST'])
+@login_required
 def query_documents():
     start_time = datetime.now()
     client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'Unknown'))
@@ -507,11 +654,57 @@ def query_documents():
         
         return jsonify({'error': str(e)}), 500
 
-async def start_websocket_server():
-    logger.info("Starting WebSocket server on localhost:8001")
+@app.route('/api/chat-sessions/<session_id>', methods=['DELETE'])
+@login_required
+def delete_chat_session(session_id):
+    start_time = datetime.now()
+    client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'Unknown'))
     
-    async with websockets.serve(websocket_handler_with_context, "localhost", 8001):
-        logger.info("WebSocket server started successfully on port 8001")
+    logger.info(f"Chat session deletion request - Session ID: {session_id}, User: {current_user.username}, Client IP: {client_ip}")
+    
+    try:
+        # Find the chat session belonging to the current user
+        chat_session = ChatSession.query.filter_by(session_id=session_id, user_id=current_user.id).first()
+        
+        if not chat_session:
+            logger.warning(f"Chat session not found - Session ID: {session_id}, Client IP: {client_ip}")
+            return jsonify({'error': 'Chat session not found'}), 404
+        
+        logger.info(f"Chat session found for deletion - Session ID: {session_id}, "
+                   f"Title: {chat_session.title}, Message count: {len(chat_session.messages)}")
+        
+        # Delete all messages in the session (cascade should handle this, but being explicit)
+        ChatMessage.query.filter_by(session_id=session_id).delete()
+        
+        # Delete the chat session
+        db.session.delete(chat_session)
+        db.session.commit()
+        
+        deletion_duration = (datetime.now() - start_time).total_seconds()
+        
+        logger.info(f"Chat session deletion completed successfully - Session ID: {session_id}, "
+                   f"Duration: {deletion_duration:.3f}s, Client IP: {client_ip}")
+        
+        return jsonify({
+            'message': 'Chat session deleted successfully',
+            'session_id': session_id,
+            'deletion_time_ms': round(deletion_duration * 1000, 2)
+        }), 200
+        
+    except Exception as e:
+        deletion_duration = (datetime.now() - start_time).total_seconds()
+        logger.error(f"Chat session deletion failed - Session ID: {session_id}, "
+                    f"Error: {str(e)}, Duration: {deletion_duration:.3f}s, "
+                    f"Client IP: {client_ip}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        
+        return jsonify({'error': str(e)}), 500
+
+async def start_websocket_server():
+    logger.info("Starting WebSocket server on 0.0.0.0:8001")
+    
+    async with websockets.serve(websocket_handler_with_context, "0.0.0.0", 8001):
+        logger.info("WebSocket server started successfully on port 8001 (accessible on all interfaces)")
         await asyncio.Future()  # run forever
 
 def run_websocket_server():
@@ -526,14 +719,8 @@ if __name__ == '__main__':
     logger.info(f"Configuration - Max file size: {app.config.get('MAX_CONTENT_LENGTH', '16MB')}")
     logger.info("="*50)
     
-    try:
-        with app.app_context():
-            db.create_all()
-            logger.info("Database tables created/verified successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {str(e)}")
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        exit(1)
+    # Database tables will be managed through Flask-Migrate
+    logger.info("Database tables managed through Flask-Migrate")
     
     try:
         # Start WebSocket server in a separate thread
@@ -543,7 +730,7 @@ if __name__ == '__main__':
         
         # Start Flask application
         logger.info("Flask application starting on http://0.0.0.0:5000")
-        logger.info("WebSocket server available on ws://localhost:8001")
+        logger.info("WebSocket server available on ws://0.0.0.0:8001")
         app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
     except Exception as e:
         logger.error(f"Failed to start application: {str(e)}")

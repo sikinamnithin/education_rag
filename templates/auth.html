@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if mode == 'login' %}Login{% else %}Register{% endif %} - Education App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .auth-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .auth-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .auth-title {
+            font-size: 28px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+
+        .auth-subtitle {
+            color: #6b7280;
+            font-size: 16px;
+        }
+
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-label {
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            padding: 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+            outline: none;
+        }
+
+        .form-input:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .auth-button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 16px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .auth-button:hover:not(:disabled) {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        .auth-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .auth-switch {
+            text-align: center;
+            margin-top: 24px;
+            color: #6b7280;
+        }
+
+        .auth-link {
+            color: #3b82f6;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .auth-link:hover {
+            text-decoration: underline;
+        }
+
+        .error-message {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .success-message {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #16a34a;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .loading-spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ffffff;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .button-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-header">
+            <h1 class="auth-title">📚 Education App</h1>
+            <p class="auth-subtitle">
+                {% if mode == 'login' %}
+                    Welcome back! Please sign in to continue.
+                {% else %}
+                    Create your account to get started.
+                {% endif %}
+            </p>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+        <div class="success-message" id="successMessage"></div>
+
+        <form class="auth-form" id="authForm">
+            <div class="form-group">
+                <label class="form-label" for="username">Username</label>
+                <input type="text" id="username" name="username" class="form-input" required>
+            </div>
+
+            {% if mode == 'register' %}
+            <div class="form-group">
+                <label class="form-label" for="email">Email</label>
+                <input type="email" id="email" name="email" class="form-input" required>
+            </div>
+            {% endif %}
+
+            <div class="form-group">
+                <label class="form-label" for="password">Password</label>
+                <input type="password" id="password" name="password" class="form-input" required>
+            </div>
+
+            <button type="submit" class="auth-button" id="submitButton">
+                <div class="button-content">
+                    <div class="loading-spinner" id="loadingSpinner"></div>
+                    <span id="buttonText">
+                        {% if mode == 'login' %}Sign In{% else %}Create Account{% endif %}
+                    </span>
+                </div>
+            </button>
+        </form>
+
+        <div class="auth-switch">
+            {% if mode == 'login' %}
+                Don't have an account? <a href="/register" class="auth-link">Sign up</a>
+            {% else %}
+                Already have an account? <a href="/login" class="auth-link">Sign in</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        const authForm = document.getElementById('authForm');
+        const submitButton = document.getElementById('submitButton');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const buttonText = document.getElementById('buttonText');
+        const errorMessage = document.getElementById('errorMessage');
+        const successMessage = document.getElementById('successMessage');
+        const mode = '{{ mode }}';
+
+        authForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(authForm);
+            const data = Object.fromEntries(formData);
+
+            // Show loading state
+            submitButton.disabled = true;
+            loadingSpinner.style.display = 'block';
+            buttonText.textContent = mode === 'login' ? 'Signing in...' : 'Creating account...';
+            hideMessages();
+
+            try {
+                const response = await fetch(window.location.pathname, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showSuccess(result.message);
+                    // Redirect to home page after successful auth
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 1000);
+                } else {
+                    showError(result.error);
+                }
+            } catch (error) {
+                showError('An error occurred. Please try again.');
+                console.error('Auth error:', error);
+            } finally {
+                // Reset loading state
+                submitButton.disabled = false;
+                loadingSpinner.style.display = 'none';
+                buttonText.textContent = mode === 'login' ? 'Sign In' : 'Create Account';
+            }
+        });
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            successMessage.style.display = 'none';
+        }
+
+        function showSuccess(message) {
+            successMessage.textContent = message;
+            successMessage.style.display = 'block';
+            errorMessage.style.display = 'none';
+        }
+
+        function hideMessages() {
+            errorMessage.style.display = 'none';
+            successMessage.style.display = 'none';
+        }
+    </script>
+</body>
+</html>

@@ -58,7 +58,8 @@ def process_indexing_task(task):
                 process_start = datetime.now()
                 success, result = document_processor.process_document(
                     document.file_path, 
-                    document.id
+                    document.id,
+                    document.user_id
                 )
                 process_duration = (datetime.now() - process_start).total_seconds()
                 

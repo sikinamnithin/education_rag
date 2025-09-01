@@ -89,14 +89,34 @@ Instructions:
                 logger.error(f"Response body: {e.response.text}")
             raise
     
-    def _search_relevant_documents(self, query_embedding: List[float], top_k: int = 5) -> List[Dict[str, Any]]:
-        """Search for relevant documents using vector similarity."""
-        search_result = self.qdrant_client.search(
-            collection_name=self.collection_name,
-            query_vector=query_embedding,
-            limit=top_k,
-            score_threshold=0.5  # Lower threshold to get more results initially
-        )
+    def _search_relevant_documents(self, query_embedding: List[float], user_id: int = None, top_k: int = None) -> List[Dict[str, Any]]:
+        """Search for relevant documents using vector similarity, filtered by user."""
+        search_params = {
+            'collection_name': self.collection_name,
+            'query_vector': query_embedding,
+            'limit': top_k or self.config.RAG_SEARCH_TOP_K,
+            'score_threshold': self.config.RAG_SEARCH_SCORE_THRESHOLD
+        }
+        
+        # Add user filter if user_id is provided
+        if user_id:
+            search_params['query_filter'] = Filter(
+                must=[
+                    FieldCondition(
+                        key="user_id",
+                        match=MatchValue(value=user_id)
+                    )
+                ]
+            )
+        
+        search_result = self.qdrant_client.search(**search_params)
+        
+        logger.info(f"Qdrant search completed - Found {len(search_result)} points")
+        for i, point in enumerate(search_result):
+            logger.info(f"Point {i+1}: Score={point.score:.3f}, ID={point.id}, "
+                       f"Payload keys={list(point.payload.keys())}")
+            content_preview = point.payload.get('content', '')[:100] if point.payload.get('content') else 'NO CONTENT'
+            logger.info(f"Point {i+1} content preview: {repr(content_preview)}")
         
         documents = []
         for point in search_result:
@@ -148,6 +168,13 @@ Instructions:
                 'metadata': metadata
             })
         
+        logger.info(f"Final documents processed: {len(documents)}")
+        for i, doc in enumerate(documents):
+            logger.info(f"Document {i+1}: Score={doc['score']:.3f}, Content length={len(doc['content'])}, "
+                       f"Source={doc['metadata']['source']}")
+            content_preview = doc['content'][:150] + "..." if len(doc['content']) > 150 else doc['content']
+            logger.info(f"Document {i+1} content: {repr(content_preview)}")
+        
         return documents
     
     def _generate_response_with_context(self, query: str, context_documents: List[Dict[str, Any]], conversation_history: List[Dict[str, str]] = None) -> str:
@@ -155,6 +182,10 @@ Instructions:
         context_text = ""
         for i, doc in enumerate(context_documents, 1):
             context_text += f"Document {i} (from {doc['metadata']['source']}):\n{doc['content']}\n\n"
+        
+        logger.info(f"Context prepared for LLM - Total context length: {len(context_text)} chars")
+        context_preview = context_text[:300] + "..." if len(context_text) > 300 else context_text
+        logger.info(f"Context preview: {repr(context_preview)}")
         
         if not context_text.strip():
             return "I don't have any relevant documents to answer your question."
@@ -190,7 +221,7 @@ Instructions:
         
         data = {
             'messages': messages,
-            'max_completion_tokens': 1000
+            'max_completion_tokens': self.config.AZURE_OPENAI_MAX_COMPLETION_TOKENS
         }
         
         try:
@@ -202,7 +233,13 @@ Instructions:
             response.raise_for_status()
             
             result = response.json()
-            return result['choices'][0]['message']['content'].strip()
+            answer_content = result['choices'][0]['message']['content'].strip()
+            
+            logger.info(f"Azure OpenAI response - Status: {response.status_code}, "
+                       f"Answer length: {len(answer_content)}")
+            logger.info(f"Raw Azure OpenAI response: {repr(result)}")
+            
+            return answer_content
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Chat API request failed - URL: {url}, Error: {str(e)}")
@@ -241,7 +278,7 @@ Instructions:
         
         data = {
             'messages': messages,
-            'max_completion_tokens': 1000
+            'max_completion_tokens': self.config.AZURE_OPENAI_MAX_COMPLETION_TOKENS
         }
         
         try:
@@ -262,11 +299,11 @@ Instructions:
                 logger.error(f"Response body: {e.response.text}")
             raise
     
-    def query_with_context(self, question: str, conversation_history: List[Dict[str, str]] = None) -> Dict[str, Any]:
+    def query_with_context(self, question: str, conversation_history: List[Dict[str, str]] = None, user_id: int = None) -> Dict[str, Any]:
         start_time = datetime.now()
         question_length = len(question)
         
-        logger.info(f"Starting RAG query with context - Length: {question_length} chars, "
+        logger.info(f"Starting RAG query with context - User: {user_id}, Length: {question_length} chars, "
                    f"Context messages: {len(conversation_history) if conversation_history else 0}, "
                    f"Question: {question[:100]}{'...' if len(question) > 100 else ''}")
         
@@ -279,7 +316,7 @@ Instructions:
             
             # Search for relevant documents
             search_start = datetime.now()
-            relevant_docs = self._search_relevant_documents(query_embedding, top_k=5)
+            relevant_docs = self._search_relevant_documents(query_embedding, user_id=user_id)
             search_duration = (datetime.now() - search_start).total_seconds()
             logger.info(f"Document search completed - Found: {len(relevant_docs)} docs, Duration: {search_duration:.3f}s")
             
@@ -324,7 +361,7 @@ Instructions:
                 }
             }
 
-    def query(self, question: str) -> Dict[str, Any]:
+    def query(self, question: str, user_id: int = None) -> Dict[str, Any]:
         start_time = datetime.now()
         question_length = len(question)
         
@@ -340,7 +377,7 @@ Instructions:
             
             # Search for relevant documents
             search_start = datetime.now()
-            relevant_docs = self._search_relevant_documents(query_embedding, top_k=5)
+            relevant_docs = self._search_relevant_documents(query_embedding, user_id=user_id)
             search_duration = (datetime.now() - search_start).total_seconds()
             logger.info(f"Document search completed - Found: {len(relevant_docs)} docs, Duration: {search_duration:.3f}s")
             

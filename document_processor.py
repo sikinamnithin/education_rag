@@ -158,7 +158,7 @@ class DocumentProcessor:
                 logger.error(f"Response body: {e.response.text}")
             raise
     
-    def process_document(self, file_path: str, document_id: int) -> tuple[bool, any]:
+    def process_document(self, file_path: str, document_id: int, user_id: int) -> tuple[bool, any]:
         start_time = datetime.now()
         logger.info(f"Starting document processing - Document ID: {document_id}, File: {file_path}")
         
@@ -199,6 +199,7 @@ class DocumentProcessor:
                     id=str(uuid.uuid4()),
                     vector=embedding,
                     payload={
+                        'user_id': user_id,
                         'document_id': document_id,
                         'chunk_id': i,
                         'source': os.path.basename(file_path),
@@ -237,14 +238,19 @@ class DocumentProcessor:
         logger.info(f"Starting vector deletion - Document ID: {document_id}, Collection: {self.collection_name}")
         
         try:
+            from qdrant_client.models import Filter, FieldCondition, MatchValue
+            
             # First check if there are any vectors to delete
             search_result = self.qdrant_client.scroll(
                 collection_name=self.collection_name,
-                scroll_filter={
-                    "must": [
-                        {"key": "document_id", "match": {"value": document_id}}
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="document_id",
+                            match=MatchValue(value=document_id)
+                        )
                     ]
-                },
+                ),
                 limit=1
             )
             
@@ -258,13 +264,14 @@ class DocumentProcessor:
             
             delete_result = self.qdrant_client.delete(
                 collection_name=self.collection_name,
-                points_selector={
-                    "filter": {
-                        "must": [
-                            {"key": "document_id", "match": {"value": document_id}}
-                        ]
-                    }
-                }
+                points_selector=Filter(
+                    must=[
+                        FieldCondition(
+                            key="document_id",
+                            match=MatchValue(value=document_id)
+                        )
+                    ]
+                )
             )
             
             deletion_duration = (datetime.now() - start_time).total_seconds()
