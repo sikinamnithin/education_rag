@@ -65,6 +65,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
+        condition: service_started
 
   worker:
     build:
@@ -94,6 +95,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
+        condition: service_started
 
 volumes:
   postgres_data:
