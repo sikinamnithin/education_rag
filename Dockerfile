@@ -4,6 +4,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
     gcc \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -13,6 +14,6 @@ COPY . .
 
 RUN mkdir -p uploads
 
-EXPOSE 5000
+EXPOSE 5000 8001
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+CMD ["python", "app.py"]

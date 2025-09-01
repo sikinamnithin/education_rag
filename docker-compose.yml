@@ -34,11 +34,6 @@ services:
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   flask-app:
     build:
@@ -46,15 +41,22 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5000:5000"
+      - "8001:8001"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/education_app
       REDIS_URL: redis://redis:6379
       QDRANT_URL: http://qdrant:6333
       AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT}
       AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY}
-      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION}
+      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-2025-01-01-preview}
       AZURE_OPENAI_DEPLOYMENT_NAME: ${AZURE_OPENAI_DEPLOYMENT_NAME}
+      AZURE_OPENAI_EMBEDDING_ENDPOINT: ${AZURE_OPENAI_EMBEDDING_ENDPOINT}
+      AZURE_OPENAI_EMBEDDING_API_KEY: ${AZURE_OPENAI_EMBEDDING_API_KEY}
       AZURE_OPENAI_EMBEDDING_DEPLOYMENT: ${AZURE_OPENAI_EMBEDDING_DEPLOYMENT}
+      AZURE_OPENAI_MAX_COMPLETION_TOKENS: ${AZURE_OPENAI_MAX_COMPLETION_TOKENS:-10000}
+      RAG_SEARCH_TOP_K: ${RAG_SEARCH_TOP_K:-5}
+      RAG_SEARCH_SCORE_THRESHOLD: ${RAG_SEARCH_SCORE_THRESHOLD:-0.5}
+      RAG_CONTEXT_MAX_LENGTH: ${RAG_CONTEXT_MAX_LENGTH:-8000}
     volumes:
       - ./uploads:/app/uploads
     depends_on:
@@ -63,7 +65,6 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
 
   worker:
     build:
@@ -76,9 +77,15 @@ services:
       QDRANT_URL: http://qdrant:6333
       AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT}
       AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY}
-      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION}
+      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-2025-01-01-preview}
       AZURE_OPENAI_DEPLOYMENT_NAME: ${AZURE_OPENAI_DEPLOYMENT_NAME}
+      AZURE_OPENAI_EMBEDDING_ENDPOINT: ${AZURE_OPENAI_EMBEDDING_ENDPOINT}
+      AZURE_OPENAI_EMBEDDING_API_KEY: ${AZURE_OPENAI_EMBEDDING_API_KEY}
       AZURE_OPENAI_EMBEDDING_DEPLOYMENT: ${AZURE_OPENAI_EMBEDDING_DEPLOYMENT}
+      AZURE_OPENAI_MAX_COMPLETION_TOKENS: ${AZURE_OPENAI_MAX_COMPLETION_TOKENS:-10000}
+      RAG_SEARCH_TOP_K: ${RAG_SEARCH_TOP_K:-5}
+      RAG_SEARCH_SCORE_THRESHOLD: ${RAG_SEARCH_SCORE_THRESHOLD:-0.5}
+      RAG_CONTEXT_MAX_LENGTH: ${RAG_CONTEXT_MAX_LENGTH:-8000}
     volumes:
       - ./uploads:/app/uploads
     depends_on:
@@ -87,7 +94,6 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
 
 volumes:
   postgres_data:

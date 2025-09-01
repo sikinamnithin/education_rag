@@ -42,8 +42,19 @@ def load_user(user_id):
 try:
     db.init_app(app)
     logger.info("Database initialized successfully")
+    
+    # Run automatic migrations
+    from migration_runner import run_automatic_migrations
+    logger.info("Running automatic database migrations...")
+    migration_success = run_automatic_migrations(app)
+    if migration_success:
+        logger.info("Database migrations completed successfully")
+    else:
+        logger.error("Database migrations failed")
+        raise Exception("Migration failure - cannot start application")
+        
 except Exception as e:
-    logger.error(f"Failed to initialize database: {str(e)}")
+    logger.error(f"Failed to initialize database or run migrations: {str(e)}")
     raise
 
 try:
@@ -719,8 +730,8 @@ if __name__ == '__main__':
     logger.info(f"Configuration - Max file size: {app.config.get('MAX_CONTENT_LENGTH', '16MB')}")
     logger.info("="*50)
     
-    # Database tables will be managed through Flask-Migrate
-    logger.info("Database tables managed through Flask-Migrate")
+    # Database tables are automatically migrated on startup
+    logger.info("Database tables automatically migrated on startup")
     
     try:
         # Start WebSocket server in a separate thread
