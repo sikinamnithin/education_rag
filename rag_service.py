@@ -45,8 +45,7 @@ class RAGService:
 Instructions:
 - Use only the information from the provided context to answer questions
 - If you cannot find the answer in the context, say "I don't have enough information to answer this question based on the provided documents."
-- Be concise and accurate in your responses
-- When referencing information, you can mention it comes from the uploaded documents
+- ellaborate the answer in details. 
 """
         
         logger.info("RAGService initialization completed")
