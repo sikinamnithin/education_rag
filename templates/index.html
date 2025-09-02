@@ -786,6 +786,7 @@
         function handleFileSelect(e) {
             const files = e.target.files;
             handleFiles(files);
+            e.target.value = '';
         }
 
         async function handleFiles(files) {

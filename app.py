@@ -72,7 +72,7 @@ except Exception as e:
     logger.error(f"Failed to initialize RAG service: {str(e)}")
     raise
 
-ALLOWED_EXTENSIONS = {'txt', 'pdf', 'doc', 'docx'}
+ALLOWED_EXTENSIONS = {'txt', 'pdf'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
