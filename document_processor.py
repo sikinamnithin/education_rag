@@ -17,6 +17,22 @@ except ImportError:
     logger.warning("PyPDF2 not installed, PDF processing will not work")
     PyPDF2 = None
 
+try:
+    import pymupdf
+except ImportError:
+    logger.warning("pymupdf not installed, fallback PDF processing will not work")
+    pymupdf = None
+
+try:
+    from pdf2image import convert_from_path
+    import pytesseract
+    from PIL import Image
+except ImportError:
+    logger.warning("pdf2image, pytesseract, or PIL not installed, OCR processing will not work")
+    convert_from_path = None
+    pytesseract = None
+    Image = None
+
 class DocumentProcessor:
     def __init__(self):
         logger.info("Initializing DocumentProcessor...")
@@ -74,16 +90,129 @@ class DocumentProcessor:
             return self._load_text_file(file_path)
     
     def _load_pdf(self, file_path: str) -> str:
-        """Load PDF content using PyPDF2."""
-        if PyPDF2 is None:
-            raise ImportError("PyPDF2 is required for PDF processing. Install with: pip install PyPDF2")
+        """Load PDF content with page-by-page fallback and image/text detection."""
         
-        text = ""
-        with open(file_path, 'rb') as file:
-            pdf_reader = PyPDF2.PdfReader(file)
-            for page in pdf_reader.pages:
-                text += page.extract_text() + "\n"
-        return text.strip()
+        # Try PyMuPDF first (like youdi-worker approach)
+        if pymupdf is not None:
+            try:
+                logger.info(f"Using PyMuPDF for PDF file: {file_path}")
+                text = ""
+                
+                with pymupdf.open(file_path) as pdf:
+                    n_pages = pdf.page_count
+                    logger.info(f"PDF has {n_pages} pages")
+                    
+                    for i in range(n_pages):
+                        try:
+                            page = pdf[i]
+                            
+                            # Check if page has images (like youdi-worker)
+                            if len(page.get_images()) > 0:
+                                logger.debug(f"Page {i+1}/{n_pages} is image-based, using OCR extraction")
+                                page_text = self._extract_text_from_image_page(file_path, i)
+                            else:
+                                logger.debug(f"Page {i+1}/{n_pages} is text-based, using direct text extraction")
+                                page_text = page.get_text()
+                            
+                            if page_text.strip():
+                                text += page_text + "\n"
+                            
+                        except Exception as e:
+                            logger.warning(f"PyMuPDF failed on page {i+1}: {e}, trying PyPDF2 fallback")
+                            
+                            # Page-level fallback to PyPDF2
+                            if PyPDF2 is not None:
+                                try:
+                                    with open(file_path, 'rb') as file:
+                                        pdf_reader = PyPDF2.PdfReader(file)
+                                        if i < len(pdf_reader.pages):
+                                            page_text = pdf_reader.pages[i].extract_text()
+                                            if page_text.strip():
+                                                text += page_text + "\n"
+                                                logger.debug(f"PyPDF2 successfully extracted page {i+1}")
+                                except Exception as pdf2_error:
+                                    logger.warning(f"PyPDF2 also failed on page {i+1}: {pdf2_error}")
+                                    continue
+                
+                if text.strip():
+                    return text.strip()
+                else:
+                    logger.warning("PyMuPDF extracted no text, falling back to full PyPDF2")
+                    
+            except (pymupdf.FileDataError, pymupdf.FileNotFoundError) as e:
+                logger.warning(f"PyMuPDF failed to open PDF {file_path}: {e}, falling back to PyPDF2")
+            except Exception as e:
+                logger.warning(f"PyMuPDF failed to process PDF {file_path}: {e}, falling back to PyPDF2")
+        
+        # Full fallback to PyPDF2
+        if PyPDF2 is not None:
+            try:
+                logger.info(f"Using PyPDF2 fallback for PDF file: {file_path}")
+                text = ""
+                with open(file_path, 'rb') as file:
+                    pdf_reader = PyPDF2.PdfReader(file)
+                    for page in pdf_reader.pages:
+                        try:
+                            page_text = page.extract_text()
+                            if page_text.strip():
+                                text += page_text + "\n"
+                        except Exception as e:
+                            logger.warning(f"PyPDF2 failed on a page: {e}")
+                            continue
+                
+                if text.strip():
+                    return text.strip()
+                    
+            except Exception as e:
+                logger.warning(f"PyPDF2 failed to read PDF {file_path}: {e}")
+        
+        raise Exception(f"All PDF readers failed to process {file_path}. The PDF may be corrupted, password-protected, or requires additional libraries.")
+    
+    def _extract_text_from_image_page(self, file_path: str, page_index: int) -> str:
+        """Extract text from image-based PDF page using OCR (like youdi-worker)."""
+        
+        if convert_from_path is None or pytesseract is None:
+            logger.warning("OCR libraries not available, falling back to basic text extraction")
+            # Fallback to basic text extraction if OCR not available
+            try:
+                with pymupdf.open(file_path) as pdf:
+                    if page_index < pdf.page_count:
+                        return pdf[page_index].get_text()
+            except:
+                pass
+            return ""
+        
+        try:
+            # Convert specific PDF page to image (like youdi-worker approach)
+            logger.debug(f"Converting PDF page {page_index + 1} to image for OCR")
+            pages = convert_from_path(file_path, first_page=page_index + 1, last_page=page_index + 1)
+            
+            if not pages:
+                logger.warning(f"No image generated for page {page_index + 1}")
+                return ""
+            
+            # Extract text using OCR
+            img = pages[0]
+            logger.debug(f"Extracting text from image using OCR for page {page_index + 1}")
+            text = pytesseract.image_to_string(img)
+            
+            logger.debug(f"OCR extracted {len(text)} characters from page {page_index + 1}")
+            return text.strip()
+            
+        except Exception as e:
+            logger.warning(f"OCR extraction failed for page {page_index + 1}: {e}")
+            
+            # Fallback to basic text extraction
+            try:
+                with pymupdf.open(file_path) as pdf:
+                    if page_index < pdf.page_count:
+                        text = pdf[page_index].get_text()
+                        logger.debug(f"Fallback text extraction got {len(text)} characters from page {page_index + 1}")
+                        return text
+            except Exception as fallback_error:
+                logger.warning(f"Fallback text extraction also failed for page {page_index + 1}: {fallback_error}")
+            
+            return ""
     
     def _load_text_file(self, file_path: str) -> str:
         """Load text file content."""

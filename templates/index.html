@@ -1201,13 +1201,16 @@
             // Only store manually selected sessions
             localStorage.setItem('chat_session_id', sessionId);
             
+            // Switch to chat tab
+            showTab('chat');
+            
             // Update active session in sidebar
             document.querySelectorAll('.chat-history-item').forEach(item => {
                 item.classList.remove('active');
             });
             
             // Find and mark the clicked item as active
-            const clickedItem = document.querySelector(`[onclick="loadChatSession('${sessionId}')"]`);
+            const clickedItem = document.querySelector(`[onclick="loadChatSession('${sessionId}')"]`).closest('.chat-history-item');
             if (clickedItem) {
                 clickedItem.classList.add('active');
             }
@@ -1225,11 +1228,14 @@
             currentSessionId = null;
             localStorage.removeItem('chat_session_id');
             
+            // Switch to chat tab
+            showTab('chat');
+            
             // Clear chat messages and add welcome message
             const chatMessages = document.getElementById('chatMessages');
             chatMessages.innerHTML = `
                 <div class="message assistant-message">
-                    Hello! I'm your document assistant. Upload some documents on the left, and then ask me any questions about them.
+                    Hello! I'm your document assistant. Upload some documents in the Documents tab, and then ask me any questions about them.
                 </div>
             `;
             
