@@ -6,7 +6,7 @@ import traceback
 import asyncio
 import threading
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for, send_file
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 import redis
@@ -72,7 +72,7 @@ except Exception as e:
     logger.error(f"Failed to initialize RAG service: {str(e)}")
     raise
 
-ALLOWED_EXTENSIONS = {'txt', 'pdf'}
+ALLOWED_EXTENSIONS = {'pdf'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -578,6 +578,27 @@ def delete_document(document_id):
         
         status_code = 404 if 'not found' in str(e).lower() else 500
         return jsonify({'error': str(e)}), status_code
+
+@app.route('/documents/<int:document_id>/view')
+@login_required
+def view_document(document_id):
+    try:
+        document = Document.query.filter_by(id=document_id, user_id=current_user.id).first()
+        if not document:
+            return jsonify({'error': 'Document not found'}), 404
+        
+        if not os.path.exists(document.file_path):
+            return jsonify({'error': 'Document file not found'}), 404
+        
+        return send_file(
+            document.file_path,
+            as_attachment=False,
+            download_name=document.original_filename,
+            mimetype='application/pdf'
+        )
+    except Exception as e:
+        logger.error(f"Error serving document {document_id}: {str(e)}")
+        return jsonify({'error': 'Failed to serve document'}), 500
 
 @app.route('/documents', methods=['GET'])
 @login_required

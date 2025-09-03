@@ -753,9 +753,9 @@
                         <div class="upload-icon">📄</div>
                         <div class="upload-text">
                             Click to upload or drag and drop<br>
-                            <small>PDF, DOC, DOCX, TXT files only</small>
+                            <small>PDF files only</small>
                         </div>
-                        <input type="file" id="fileInput" class="file-input" accept=".pdf,.doc,.docx,.txt" multiple>
+                        <input type="file" id="fileInput" class="file-input" accept=".pdf" multiple>
                     </div>
 
                     <div class="documents-list" id="documentsList">
@@ -866,7 +866,7 @@
                 documentsList.innerHTML = documents.map(doc => `
                     <div class="document-item">
                         <div class="document-info">
-                            <div class="document-name">${doc.original_filename}</div>
+                            <div class="document-name" style="cursor: pointer; color: #3b82f6;" onclick="openDocument(${doc.id})">${doc.original_filename}</div>
                             <div class="document-status status-${doc.status}">${doc.status}</div>
                         </div>
                         <button class="delete-btn" onclick="deleteDocument(${doc.id})">Delete</button>
@@ -888,6 +888,11 @@
                 sendBtn.disabled = true;
                 chatInput.placeholder = "Upload documents first to enable chat...";
             }
+        }
+
+        function openDocument(documentId) {
+            const documentUrl = `/documents/${documentId}/view`;
+            window.open(documentUrl, '_blank');
         }
 
         async function deleteDocument(documentId) {
