@@ -264,28 +264,38 @@ class DocumentProcessor:
             'api-version': self.embedding_api_version
         }
         
-        data = {
-            'input': texts,
-            'model': self.embedding_deployment
-        }
+        # Process texts in batches to avoid API limits
+        batch_size = 16  # Azure OpenAI embedding API batch limit
+        all_embeddings = []
         
-        try:
-            response = requests.post(url, headers=headers, params=params, json=data)
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i:i + batch_size]
             
-            # Log the response for debugging if it's an error
-            if response.status_code != 200:
-                logger.error(f"Embedding API error - Status: {response.status_code}, Response: {response.text}")
+            data = {
+                'input': batch_texts,
+                'model': self.embedding_deployment
+            }
             
-            response.raise_for_status()
-            
-            result = response.json()
-            return [item['embedding'] for item in result['data']]
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Embedding API request failed - URL: {url}, Error: {str(e)}")
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"Response body: {e.response.text}")
-            raise
+            try:
+                response = requests.post(url, headers=headers, params=params, json=data)
+                
+                # Log the response for debugging if it's an error
+                if response.status_code != 200:
+                    logger.error(f"Embedding API error - Status: {response.status_code}, Response: {response.text}")
+                
+                response.raise_for_status()
+                
+                result = response.json()
+                batch_embeddings = [item['embedding'] for item in result['data']]
+                all_embeddings.extend(batch_embeddings)
+                
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Embedding API request failed - URL: {url}, Error: {str(e)}")
+                if hasattr(e, 'response') and e.response is not None:
+                    logger.error(f"Response body: {e.response.text}")
+                raise
+        
+        return all_embeddings
     
     def process_document(self, file_path: str, document_id: int, user_id: int) -> tuple[bool, any]:
         start_time = datetime.now()
