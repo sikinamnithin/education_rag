@@ -1,6 +1,7 @@
 import logging
 import traceback
 import requests
+import json
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from qdrant_client import QdrantClient
@@ -246,6 +247,95 @@ Instructions:
                 logger.error(f"Response body: {e.response.text}")
             raise
 
+    def _generate_streaming_response_with_context(self, query: str, context_documents: List[Dict[str, Any]], conversation_history: List[Dict[str, str]] = None):
+        """Generate streaming response using Azure OpenAI Chat API."""
+        context_text = ""
+        for i, doc in enumerate(context_documents, 1):
+            context_text += f"Document {i} (from {doc['metadata']['source']}):\n{doc['content']}\n\n"
+        
+        logger.info(f"Context prepared for streaming LLM - Total context length: {len(context_text)} chars")
+        context_preview = context_text[:300] + "..." if len(context_text) > 300 else context_text
+        logger.info(f"Context preview: {repr(context_preview)}")
+        
+        if not context_text.strip():
+            yield "I don't have any relevant documents to answer your question."
+            return
+        
+        # Build conversation messages
+        messages = [{"role": "system", "content": self.system_prompt}]
+        
+        # Add conversation history for context
+        if conversation_history:
+            for msg in conversation_history[-8:]:  # Keep last 8 messages for context
+                if msg['role'] in ['user', 'assistant']:
+                    messages.append({
+                        "role": msg['role'], 
+                        "content": msg['content']
+                    })
+        
+        # Add current query with document context
+        current_query = f"Context:\n{context_text}\n\nQuestion: {query}\n\nAnswer:"
+        messages.append({"role": "user", "content": current_query})
+        
+        # Fix URL formatting
+        base_endpoint = self.chat_endpoint.rstrip('/')
+        url = f"{base_endpoint}/openai/deployments/{self.chat_deployment}/chat/completions"
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'api-key': self.chat_api_key
+        }
+        
+        params = {
+            'api-version': self.chat_api_version
+        }
+        
+        data = {
+            'messages': messages,
+            'max_completion_tokens': self.config.AZURE_OPENAI_MAX_COMPLETION_TOKENS,
+            'stream': True
+        }
+        
+        try:
+            response = requests.post(url, headers=headers, params=params, json=data, stream=True)
+            
+            if response.status_code != 200:
+                logger.error(f"Chat API error - Status: {response.status_code}, Response: {response.text}")
+                yield f"Error: Unable to process request (Status: {response.status_code})"
+                return
+            
+            logger.info(f"Azure OpenAI streaming response started - Status: {response.status_code}")
+            
+            for line in response.iter_lines():
+                if line:
+                    line_str = line.decode('utf-8')
+                    if line_str.startswith('data: '):
+                        data_str = line_str[6:]  # Remove 'data: ' prefix
+                        
+                        if data_str == '[DONE]':
+                            break
+                            
+                        try:
+                            chunk_data = json.loads(data_str)
+                            choices = chunk_data.get('choices', [])
+                            
+                            if choices and len(choices) > 0:
+                                delta = choices[0].get('delta', {})
+                                content = delta.get('content', '')
+                                
+                                if content:
+                                    yield content
+                                    
+                        except json.JSONDecodeError:
+                            # Skip malformed JSON chunks
+                            continue
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Chat API streaming request failed - URL: {url}, Error: {str(e)}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"Response body: {e.response.text}")
+            yield f"Error: Failed to connect to AI service - {str(e)}"
+
     def _generate_response(self, query: str, context_documents: List[Dict[str, Any]]) -> str:
         """Generate response using Azure OpenAI Chat API."""
         # Prepare context from retrieved documents
@@ -360,6 +450,53 @@ Instructions:
                 }
             }
 
+    def query_with_context_streaming(self, question: str, conversation_history: List[Dict[str, str]] = None, user_id: int = None):
+        """Stream response with context - yields chunks as they arrive."""
+        start_time = datetime.now()
+        question_length = len(question)
+        
+        logger.info(f"Starting streaming RAG query with context - User: {user_id}, Length: {question_length} chars, "
+                   f"Context messages: {len(conversation_history) if conversation_history else 0}, "
+                   f"Question: {question[:100]}{'...' if len(question) > 100 else ''}")
+        
+        try:
+            # Generate embedding for the question
+            embedding_start = datetime.now()
+            query_embedding = self._get_embedding(question)
+            embedding_duration = (datetime.now() - embedding_start).total_seconds()
+            logger.info(f"Question embedding generated - Duration: {embedding_duration:.3f}s")
+            
+            # Search for relevant documents
+            search_start = datetime.now()
+            relevant_docs = self._search_relevant_documents(query_embedding, user_id=user_id)
+            search_duration = (datetime.now() - search_start).total_seconds()
+            logger.info(f"Document search completed - Found: {len(relevant_docs)} docs, Duration: {search_duration:.3f}s")
+            
+            # Generate streaming response
+            if not relevant_docs:
+                yield "I don't have any relevant documents to answer your question. Please make sure you have uploaded documents that contain information related to your query."
+            else:
+                generation_start = datetime.now()
+                full_answer = ""
+                for chunk in self._generate_streaming_response_with_context(question, relevant_docs, conversation_history):
+                    full_answer += chunk
+                    yield chunk
+                
+                generation_duration = (datetime.now() - generation_start).total_seconds()
+                logger.info(f"Streaming response completed - Duration: {generation_duration:.3f}s, Total length: {len(full_answer)}")
+            
+            total_duration = (datetime.now() - start_time).total_seconds()
+            logger.info(f"Streaming RAG query with context completed - Documents found: {len(relevant_docs)}, "
+                       f"Total time: {total_duration:.3f}s")
+            
+        except Exception as e:
+            total_duration = (datetime.now() - start_time).total_seconds()
+            logger.error(f"Streaming RAG query with context failed - Question: {question[:100]}{'...' if len(question) > 100 else ''}, "
+                        f"Error: {str(e)}, Duration: {total_duration:.3f}s")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            
+            yield f"Sorry, I encountered an error while processing your query: {str(e)}"
+
     def query(self, question: str, user_id: int = None) -> Dict[str, Any]:
         start_time = datetime.now()
         question_length = len(question)
@@ -420,3 +557,50 @@ Instructions:
                     "answer_length": 0
                 }
             }
+
+    def query_with_context_streaming(self, question: str, conversation_history: List[Dict[str, str]] = None, user_id: int = None):
+        """Stream response with context - yields chunks as they arrive."""
+        start_time = datetime.now()
+        question_length = len(question)
+        
+        logger.info(f"Starting streaming RAG query with context - User: {user_id}, Length: {question_length} chars, "
+                   f"Context messages: {len(conversation_history) if conversation_history else 0}, "
+                   f"Question: {question[:100]}{'...' if len(question) > 100 else ''}")
+        
+        try:
+            # Generate embedding for the question
+            embedding_start = datetime.now()
+            query_embedding = self._get_embedding(question)
+            embedding_duration = (datetime.now() - embedding_start).total_seconds()
+            logger.info(f"Question embedding generated - Duration: {embedding_duration:.3f}s")
+            
+            # Search for relevant documents
+            search_start = datetime.now()
+            relevant_docs = self._search_relevant_documents(query_embedding, user_id=user_id)
+            search_duration = (datetime.now() - search_start).total_seconds()
+            logger.info(f"Document search completed - Found: {len(relevant_docs)} docs, Duration: {search_duration:.3f}s")
+            
+            # Generate streaming response
+            if not relevant_docs:
+                yield "I don't have any relevant documents to answer your question. Please make sure you have uploaded documents that contain information related to your query."
+            else:
+                generation_start = datetime.now()
+                full_answer = ""
+                for chunk in self._generate_streaming_response_with_context(question, relevant_docs, conversation_history):
+                    full_answer += chunk
+                    yield chunk
+                
+                generation_duration = (datetime.now() - generation_start).total_seconds()
+                logger.info(f"Streaming response completed - Duration: {generation_duration:.3f}s, Total length: {len(full_answer)}")
+            
+            total_duration = (datetime.now() - start_time).total_seconds()
+            logger.info(f"Streaming RAG query with context completed - Documents found: {len(relevant_docs)}, "
+                       f"Total time: {total_duration:.3f}s")
+            
+        except Exception as e:
+            total_duration = (datetime.now() - start_time).total_seconds()
+            logger.error(f"Streaming RAG query with context failed - Question: {question[:100]}{'...' if len(question) > 100 else ''}, "
+                        f"Error: {str(e)}, Duration: {total_duration:.3f}s")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            
+            yield f"Sorry, I encountered an error while processing your query: {str(e)}"

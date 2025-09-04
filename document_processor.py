@@ -58,8 +58,10 @@ class DocumentProcessor:
         self.collection_name = "documents"
         self.chunk_size = 1000
         self.chunk_overlap = 200
+        self.batch_size = 100  # Max vectors to upload per batch
         
         logger.info(f"Text chunking configured - Chunk size: {self.chunk_size}, Overlap: {self.chunk_overlap}")
+        logger.info(f"Vector batch processing configured - Batch size: {self.batch_size}")
         
         self._ensure_collection_exists()
         logger.info("DocumentProcessor initialization completed")
@@ -249,6 +251,35 @@ class DocumentProcessor:
         
         return chunks
     
+    def _batch_upsert_points(self, points: List[PointStruct]) -> None:
+        """Upload points to Qdrant in batches to avoid timeouts."""
+        total_points = len(points)
+        
+        if total_points <= self.batch_size:
+            logger.info(f"Uploading {total_points} points in single batch")
+            self.qdrant_client.upsert(
+                collection_name=self.collection_name,
+                points=points
+            )
+            return
+        
+        logger.info(f"Uploading {total_points} points in batches of {self.batch_size}")
+        
+        for i in range(0, total_points, self.batch_size):
+            batch_end = min(i + self.batch_size, total_points)
+            batch_points = points[i:batch_end]
+            batch_num = (i // self.batch_size) + 1
+            total_batches = (total_points + self.batch_size - 1) // self.batch_size
+            
+            logger.info(f"Uploading batch {batch_num}/{total_batches} - Points {i+1}-{batch_end}")
+            
+            self.qdrant_client.upsert(
+                collection_name=self.collection_name,
+                points=batch_points
+            )
+        
+        logger.info(f"Successfully uploaded all {total_points} points in {total_batches} batches")
+
     def _get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Get embeddings for a list of texts using Azure OpenAI."""
         # Fix URL formatting - remove trailing slash and ensure proper format
@@ -349,12 +380,9 @@ class DocumentProcessor:
                 )
                 points.append(point)
             
-            # Store in Qdrant
+            # Store in Qdrant using batch processing
             store_start = datetime.now()
-            self.qdrant_client.upsert(
-                collection_name=self.collection_name,
-                points=points
-            )
+            self._batch_upsert_points(points)
             store_duration = (datetime.now() - store_start).total_seconds()
             
             total_duration = (datetime.now() - start_time).total_seconds()

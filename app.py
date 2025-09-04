@@ -166,28 +166,36 @@ class WebSocketChatHandler:
             await self.send_message(websocket, 'typing', {'status': True})
             
             start_time = datetime.now()
-            response = rag_service.query_with_context(question, conversation_history, user_id=user_id)
+            
+            # Stream the response
+            full_answer = ""
+            async for chunk in self.stream_rag_response(question, conversation_history, user_id):
+                full_answer += chunk
+                await self.send_message(websocket, 'message_chunk', {
+                    'content': chunk,
+                    'role': 'assistant'
+                })
             
             assistant_message = ChatMessage(
                 session_id=session_id,
                 role='assistant',
-                content=response['answer'],
-                message_metadata=response.get('metadata')
+                content=full_answer,
+                message_metadata={'streaming': True}
             )
             db.session.add(assistant_message)
             db.session.commit()
             
             await self.send_message(websocket, 'typing', {'status': False})
-            await self.send_message(websocket, 'message_response', {
+            await self.send_message(websocket, 'message_complete', {
                 'message_id': assistant_message.id,
-                'content': response['answer'],
+                'content': full_answer,
                 'role': 'assistant',
                 'timestamp': assistant_message.created_at.isoformat(),
-                'metadata': response.get('metadata')
+                'metadata': {'streaming': True}
             })
             
             logger.info(f"Chat message processed - Session: {session_id}, "
-                       f"Question length: {len(question)}, Answer length: {len(response['answer'])}")
+                       f"Question length: {len(question)}, Answer length: {len(full_answer)}")
             
         except Exception as e:
             logger.error(f"Chat message handling failed: {str(e)}")
@@ -273,6 +281,36 @@ class WebSocketChatHandler:
         except Exception as e:
             logger.error(f"Message handling failed: {str(e)}")
             await self.send_message(websocket, 'error', {'message': 'Internal server error'})
+    
+    async def stream_rag_response(self, question: str, conversation_history, user_id: int):
+        """Convert the synchronous streaming RAG response to async generator."""
+        import asyncio
+        import concurrent.futures
+        
+        def get_streaming_response():
+            return rag_service.query_with_context_streaming(question, conversation_history, user_id)
+        
+        # Run the blocking generator in a thread pool
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            loop = asyncio.get_event_loop()
+            
+            # Get the generator in a separate thread
+            stream_gen = await loop.run_in_executor(executor, get_streaming_response)
+            
+            # Now yield from the generator in a thread-safe way
+            while True:
+                try:
+                    # Get the next chunk in a separate thread
+                    chunk = await loop.run_in_executor(executor, lambda: next(stream_gen, None))
+                    if chunk is None:
+                        break
+                    yield chunk
+                except StopIteration:
+                    break
+                except Exception as e:
+                    logger.error(f"Error in streaming response: {str(e)}")
+                    yield f"Error: {str(e)}"
+                    break
     
     async def handle_client(self, websocket):
         await self.register_client(websocket)

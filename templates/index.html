@@ -181,6 +181,84 @@
             display: none;
         }
 
+        .upload-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+
+        .upload-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .upload-btn:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        .upload-progress {
+            margin-top: 20px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            display: none;
+        }
+
+        .upload-progress h4 {
+            margin: 0 0 12px 0;
+            color: #495057;
+            font-size: 14px;
+        }
+
+        .progress-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .progress-item:last-child {
+            border-bottom: none;
+        }
+
+        .progress-file {
+            flex: 1;
+            font-size: 13px;
+            color: #495057;
+            margin-right: 12px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .progress-status {
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .progress-status.uploading {
+            color: #3b82f6;
+        }
+
+        .progress-status.success {
+            color: #28a745;
+        }
+
+        .progress-status.error {
+            color: #dc3545;
+        }
+
         .documents-list {
             flex: 1;
             overflow-y: auto;
@@ -367,6 +445,26 @@
 
         .assistant-message a:hover {
             color: #2563eb;
+        }
+
+        .streaming-message {
+            position: relative;
+        }
+
+        .streaming-message::after {
+            content: '▋';
+            color: #3b82f6;
+            animation: blink 1s infinite;
+            font-weight: normal;
+        }
+
+        @keyframes blink {
+            0%, 50% {
+                opacity: 1;
+            }
+            51%, 100% {
+                opacity: 0;
+            }
         }
 
         .assistant-message table {
@@ -752,10 +850,20 @@
                     <div class="upload-area" id="uploadArea">
                         <div class="upload-icon">📄</div>
                         <div class="upload-text">
-                            Click to upload or drag and drop<br>
+                            Click to upload files/folder or drag and drop<br>
                             <small>PDF files only</small>
                         </div>
+                        <div class="upload-buttons">
+                            <button class="upload-btn" onclick="selectFiles()">📄 Select Files</button>
+                            <button class="upload-btn" onclick="selectFolder()">📁 Select Folder</button>
+                        </div>
                         <input type="file" id="fileInput" class="file-input" accept=".pdf" multiple>
+                        <input type="file" id="folderInput" class="file-input" webkitdirectory multiple>
+                    </div>
+
+                    <div class="upload-progress" id="uploadProgress">
+                        <h4>Upload Progress</h4>
+                        <div id="progressList"></div>
                     </div>
 
                     <div class="documents-list" id="documentsList">
@@ -769,18 +877,21 @@
     <script>
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
+        const folderInput = document.getElementById('folderInput');
         const documentsList = document.getElementById('documentsList');
         const chatMessages = document.getElementById('chatMessages');
         const chatInput = document.getElementById('chatInput');
         const sendBtn = document.getElementById('sendBtn');
+        const uploadProgress = document.getElementById('uploadProgress');
+        const progressList = document.getElementById('progressList');
 
         let hasDocuments = false;
 
-        uploadArea.addEventListener('click', () => fileInput.click());
         uploadArea.addEventListener('dragover', handleDragOver);
         uploadArea.addEventListener('drop', handleDrop);
         uploadArea.addEventListener('dragleave', handleDragLeave);
         fileInput.addEventListener('change', handleFileSelect);
+        folderInput.addEventListener('change', handleFolderSelect);
         sendBtn.addEventListener('click', sendMessage);
         chatInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -795,6 +906,14 @@
             this.style.height = Math.min(this.scrollHeight, 100) + 'px';
         });
 
+        function selectFiles() {
+            fileInput.click();
+        }
+
+        function selectFolder() {
+            folderInput.click();
+        }
+
         function handleDragOver(e) {
             e.preventDefault();
             uploadArea.classList.add('dragover');
@@ -805,47 +924,185 @@
             uploadArea.classList.remove('dragover');
         }
 
-        function handleDrop(e) {
+        async function handleDrop(e) {
             e.preventDefault();
             uploadArea.classList.remove('dragover');
-            const files = e.dataTransfer.files;
-            handleFiles(files);
+            
+            const files = [];
+            const items = e.dataTransfer.items;
+            
+            if (items) {
+                // Handle drag and drop with DataTransferItemList (supports folders)
+                const promises = [];
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.kind === 'file') {
+                        const entry = item.webkitGetAsEntry();
+                        if (entry) {
+                            if (entry.isDirectory) {
+                                promises.push(traverseDirectory(entry, files));
+                            } else if (entry.isFile && entry.name.toLowerCase().endsWith('.pdf')) {
+                                files.push(item.getAsFile());
+                            }
+                        }
+                    }
+                }
+                // Wait for all directory traversals to complete
+                await Promise.all(promises);
+            } else {
+                // Fallback for older browsers
+                const fileList = e.dataTransfer.files;
+                for (let file of fileList) {
+                    if (file.name.toLowerCase().endsWith('.pdf')) {
+                        files.push(file);
+                    }
+                }
+            }
+            
+            if (files.length > 0) {
+                handleFiles(files);
+            } else {
+                alert('No PDF files found. Please select or drop PDF files only.');
+            }
+        }
+
+        async function traverseDirectory(dirEntry, files) {
+            return new Promise((resolve) => {
+                const reader = dirEntry.createReader();
+                reader.readEntries(async (entries) => {
+                    const promises = [];
+                    for (let entry of entries) {
+                        if (entry.isDirectory) {
+                            promises.push(traverseDirectory(entry, files));
+                        } else if (entry.isFile && entry.name.toLowerCase().endsWith('.pdf')) {
+                            promises.push(new Promise((fileResolve) => {
+                                entry.file(file => {
+                                    files.push(file);
+                                    fileResolve();
+                                });
+                            }));
+                        }
+                    }
+                    await Promise.all(promises);
+                    resolve();
+                });
+            });
         }
 
         function handleFileSelect(e) {
-            const files = e.target.files;
-            handleFiles(files);
+            const files = Array.from(e.target.files).filter(file => 
+                file.name.toLowerCase().endsWith('.pdf')
+            );
+            if (files.length > 0) {
+                handleFiles(files);
+            } else {
+                alert('Please select PDF files only.');
+            }
+            e.target.value = '';
+        }
+
+        function handleFolderSelect(e) {
+            const files = Array.from(e.target.files).filter(file => 
+                file.name.toLowerCase().endsWith('.pdf')
+            );
+            if (files.length > 0) {
+                handleFiles(files);
+            } else {
+                alert('No PDF files found in the selected folder.');
+            }
             e.target.value = '';
         }
 
         async function handleFiles(files) {
+            if (files.length === 0) return;
+            
+            // Show progress container
+            uploadProgress.style.display = 'block';
+            progressList.innerHTML = '';
+            
+            // Create progress items for all files
+            const progressItems = {};
             for (let file of files) {
-                await uploadFile(file);
+                const progressId = `progress-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                const progressItem = createProgressItem(progressId, file.name);
+                progressList.appendChild(progressItem);
+                progressItems[progressId] = progressItem;
             }
+            
+            // Upload files sequentially
+            let successCount = 0;
+            let errorCount = 0;
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const progressId = Object.keys(progressItems)[i];
+                const progressItem = progressItems[progressId];
+                
+                try {
+                    updateProgressStatus(progressItem, 'uploading', 'Uploading...');
+                    await uploadFile(file);
+                    updateProgressStatus(progressItem, 'success', 'Complete');
+                    successCount++;
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    updateProgressStatus(progressItem, 'error', 'Failed');
+                    errorCount++;
+                }
+                
+                // Small delay between uploads to avoid overwhelming the server
+                if (i < files.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
+            
+            // Hide progress after a delay and show summary
+            setTimeout(() => {
+                uploadProgress.style.display = 'none';
+                if (errorCount > 0) {
+                    alert(`Upload completed: ${successCount} successful, ${errorCount} failed`);
+                } else {
+                    console.log(`All ${successCount} files uploaded successfully`);
+                }
+            }, 3000);
+            
+            // Reload documents list
             loadDocuments();
+        }
+
+        function createProgressItem(id, filename) {
+            const item = document.createElement('div');
+            item.className = 'progress-item';
+            item.id = id;
+            item.innerHTML = `
+                <div class="progress-file">${filename}</div>
+                <div class="progress-status">Queued</div>
+            `;
+            return item;
+        }
+
+        function updateProgressStatus(progressItem, statusClass, statusText) {
+            const statusElement = progressItem.querySelector('.progress-status');
+            statusElement.className = `progress-status ${statusClass}`;
+            statusElement.textContent = statusText;
         }
 
         async function uploadFile(file) {
             const formData = new FormData();
             formData.append('file', file);
 
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const result = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(result.error || 'Upload failed');
-                }
-                
-                console.log('File uploaded successfully:', result);
-            } catch (error) {
-                console.error('Upload error:', error);
-                alert('Upload failed: ' + error.message);
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.error || 'Upload failed');
             }
+            
+            console.log('File uploaded successfully:', result);
+            return result;
         }
 
         async function loadDocuments() {
@@ -994,6 +1251,8 @@
             };
         }
 
+        let currentStreamingMessage = null;
+
         function handleWebSocketMessage(data) {
             switch (data.type) {
                 case 'connected':
@@ -1011,7 +1270,23 @@
                     handleTypingIndicator(data.status);
                     break;
                     
+                case 'message_chunk':
+                    if (isTyping) {
+                        removeTypingIndicator();
+                        isTyping = false;
+                    }
+                    handleStreamingChunk(data.content);
+                    break;
+                    
+                case 'message_complete':
+                    if (currentStreamingMessage) {
+                        finalizeStreamingMessage();
+                    }
+                    enableChatInput();
+                    break;
+                    
                 case 'message_response':
+                    // Fallback for non-streaming responses
                     if (isTyping) {
                         removeTypingIndicator();
                     }
@@ -1030,6 +1305,9 @@
                 case 'error':
                     if (isTyping) {
                         removeTypingIndicator();
+                    }
+                    if (currentStreamingMessage) {
+                        finalizeStreamingMessage();
                     }
                     addMessage('Error: ' + data.message, 'assistant');
                     enableChatInput();
@@ -1126,6 +1404,39 @@
             messageDiv.style.opacity = '0.7';
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function handleStreamingChunk(chunk) {
+            if (!currentStreamingMessage) {
+                // Create new streaming message element
+                currentStreamingMessage = document.createElement('div');
+                currentStreamingMessage.className = 'message assistant-message streaming-message';
+                currentStreamingMessage.dataset.content = '';
+                chatMessages.appendChild(currentStreamingMessage);
+            }
+            
+            // Add chunk to the accumulated content
+            const currentContent = currentStreamingMessage.dataset.content || '';
+            const newContent = currentContent + chunk;
+            currentStreamingMessage.dataset.content = newContent;
+            
+            // Render the updated content with markdown
+            try {
+                currentStreamingMessage.innerHTML = marked.parse(newContent);
+            } catch (error) {
+                console.error('Markdown parsing error during streaming:', error);
+                currentStreamingMessage.textContent = newContent; // Fallback to plain text
+            }
+            
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function finalizeStreamingMessage() {
+            if (currentStreamingMessage) {
+                currentStreamingMessage.classList.remove('streaming-message');
+                currentStreamingMessage = null;
+            }
         }
 
         function addMessage(text, type, metadata) {
