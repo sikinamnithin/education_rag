@@ -722,7 +722,7 @@ def query_documents():
                     f"Client IP: {client_ip}")
         logger.error(f"Full traceback: {traceback.format_exc()}")
         
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Sorry, we are facing an issue. Please try again later.'}), 500
 
 @app.route('/api/chat-sessions/<session_id>', methods=['DELETE'])
 @login_required

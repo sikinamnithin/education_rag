@@ -495,7 +495,7 @@ Instructions:
                         f"Error: {str(e)}, Duration: {total_duration:.3f}s")
             logger.error(f"Full traceback: {traceback.format_exc()}")
             
-            yield f"Sorry, I encountered an error while processing your query: {str(e)}"
+            yield "Sorry, I encountered an error while processing your query. Please try again later."
 
     def query(self, question: str, user_id: int = None) -> Dict[str, Any]:
         start_time = datetime.now()
@@ -603,4 +603,4 @@ Instructions:
                         f"Error: {str(e)}, Duration: {total_duration:.3f}s")
             logger.error(f"Full traceback: {traceback.format_exc()}")
             
-            yield f"Sorry, I encountered an error while processing your query: {str(e)}"
+            yield "Sorry, I encountered an error while processing your query. Please try again later."
