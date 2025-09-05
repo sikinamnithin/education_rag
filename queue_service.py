@@ -77,3 +77,26 @@ class QueueService:
                         f"Timeout: {timeout}s, Error: {str(e)}")
             logger.error(f"Full traceback: {traceback.format_exc()}")
             return None
+    
+    def retry_task(self, task):
+        """Retry a failed task by adding it back to the end of the queue."""
+        start_time = datetime.now()
+        
+        try:
+            message_json = json.dumps(task)
+            queue_length = self.redis_client.rpush(self.queue_name, message_json)
+            
+            duration = (datetime.now() - start_time).total_seconds()
+            
+            logger.info(f"Task retried and added to end of queue - Document ID: {task.get('document_id')}, "
+                       f"Action: {task.get('action')}, Queue length: {queue_length}, "
+                       f"Duration: {duration:.3f}s")
+            
+            return True
+            
+        except Exception as e:
+            duration = (datetime.now() - start_time).total_seconds()
+            logger.error(f"Failed to retry task - Document ID: {task.get('document_id')}, "
+                        f"Action: {task.get('action')}, Error: {str(e)}, Duration: {duration:.3f}s")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return False

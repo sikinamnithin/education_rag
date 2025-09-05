@@ -39,15 +39,15 @@ def process_indexing_task(task):
     
     with app.app_context():
         try:
-            document = Document.query.get(document_id)
-            if not document:
-                logger.error(f"Document not found in database - ID: {document_id}")
-                return
-            
-            logger.info(f"Found document - ID: {document_id}, Filename: {document.original_filename}, "
-                       f"Status: {document.status}, File size: {document.file_size} bytes")
-            
             if action == 'index':
+                document = Document.query.get(document_id)
+                if not document:
+                    logger.error(f"Document not found in database - ID: {document_id}")
+                    return
+                
+                logger.info(f"Found document - ID: {document_id}, Filename: {document.original_filename}, "
+                           f"Status: {document.status}, File size: {document.file_size} bytes")
+                
                 logger.info(f"Starting document indexing - Document ID: {document_id}, "
                            f"File: {document.original_filename}, Path: {document.file_path}")
                 
@@ -92,6 +92,13 @@ def process_indexing_task(task):
                 else:
                     logger.error(f"Vector deletion failed - Document ID: {document_id}, "
                                 f"Processing time: {delete_duration:.2f}s")
+                    
+                    logger.info(f"Retrying failed deletion task - Document ID: {document_id}")
+                    retry_success = queue_service.retry_task(task)
+                    if retry_success:
+                        logger.info(f"Deletion task successfully queued for retry - Document ID: {document_id}")
+                    else:
+                        logger.error(f"Failed to queue deletion task for retry - Document ID: {document_id}")
             
             else:
                 logger.warning(f"Unknown action received - Document ID: {document_id}, Action: {action}")
