@@ -20,6 +20,7 @@ import logging
 from datetime import datetime
 from typing import Set, List, Dict, Any
 from flask import Flask
+from sqlalchemy import text
 from models import db, Document
 from config import Config
 from qdrant_client import QdrantClient
@@ -64,7 +65,7 @@ class OrphanedVectorCleanup:
         # Test database connection
         try:
             with self.app.app_context():
-                db.session.execute('SELECT 1')
+                db.session.execute(text('SELECT 1'))
                 logger.info("Database connection verified")
         except Exception as e:
             logger.error(f"Failed to connect to database: {str(e)}")
